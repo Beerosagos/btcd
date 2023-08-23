@@ -118,6 +118,17 @@ func (hash Hash) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON parses the hash with JSON appropriate string value.
 func (hash *Hash) UnmarshalJSON(input []byte) error {
+	// If the fist byte indicates an array, the hash could have been marshalled
+	// using the legacy method and e.g. persisted. Please note that this could
+	// also be a coincidence, so if decoding the legacy format fails we proceed
+	// with the current method and, in case that fails too, we progate its errors.
+	if input[0] == '[' {
+		err := DecodeLegacy(hash, input)
+		if err == nil {
+			return nil
+		}
+	}
+
 	var sh string
 	err := json.Unmarshal(input, &sh)
 	if err != nil {
@@ -216,4 +227,18 @@ func Decode(dst *Hash, src string) error {
 	}
 
 	return nil
+}
+
+// DecodeLegacy decodes an Hash that has been encoded with the legacy method
+// (i.e. represented as a bytes array) to a destination.
+func DecodeLegacy(dst *Hash, src []byte) error {
+	var hashBytes []byte
+	err := json.Unmarshal(src, &hashBytes)
+	if err != nil {
+		return err
+	}
+	if len(hashBytes) != HashSize {
+		return ErrHashStrSize
+	}
+	return dst.SetBytes(hashBytes)
 }
